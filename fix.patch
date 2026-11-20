@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Rob <rob@performanceinsights.ai>
+Date: Thu, 19 Nov 2026 04:48:48 +0100
+Subject: [PATCH] apparmor: fix label refcount leak in apparmor_unix_stream_connect()
+
+Since commit 88fec3526e84 ("apparmor: make sure unix socket labeling
+is correctly updated."), apparmor_sk_alloc_security() takes a
+reference on the current task's label for every new sock. That
+includes newsk, which unix_stream_connect() allocates through
+unix_create1() before it calls security_unix_stream_connect().
+
+apparmor_unix_stream_connect() then assigns new_ctx->label a reference
+to the peer's label without putting the one taken in sk_alloc, so every
+successful AF_UNIX stream connect leaks one reference to the connecting
+task's label. Commit f3c0675bb9e0 removed the AA_BUG() that asserted
+new_ctx->label was still NULL here, but did not drop the reference.
+
+The leaked references keep the label, its profiles and their policy
+namespace allocated forever once the profile is removed or replaced.
+On a host that loads and removes a profile and namespace per container
+this shows up as steadily growing unreclaimable slab.
+
+Put the old label before the assignment, as apparmor_socket_post_create(),
+apparmor_socket_socketpair() and apparmor_sk_clone_security() already do.
+
+Fixes: 88fec3526e84 ("apparmor: make sure unix socket labeling is correctly updated.")
+---
+ security/apparmor/lsm.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/security/apparmor/lsm.c b/security/apparmor/lsm.c
+--- a/security/apparmor/lsm.c
++++ b/security/apparmor/lsm.c
+@@ -1206,6 +1206,7 @@ static int apparmor_unix_stream_connect(struct sock *sk, struct sock *peer_sk,
+ 	/* newsk doesn't go through post_create, but does go through
+ 	 * security_sk_alloc()
+ 	 */
++	aa_put_label(rcu_dereference_protected(new_ctx->label, true));
+ 	rcu_assign_pointer(new_ctx->label,
+ 			   aa_get_label(rcu_dereference_protected(peer_ctx->label,
+ 								  true)));
