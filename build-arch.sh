@@ -1,9 +1,12 @@
 #!/bin/bash
 # Build base + fix kernels for one architecture from the pinned mainline commit, in its own worktree.
-# Usage: SHA=<sha> build-arch.sh arm64|riscv   (native or cross; CROSS_COMPILE picked automatically)
+# Usage: SHA=<sha> [REPO=<git url>] [REF=<ref>] build-arch.sh x86|arm64|riscv   (native or cross; CROSS_COMPILE picked automatically)
+# REPO defaults to Linus's tree; stable and longterm tags live in the stable tree. REF (a tag or branch) is the fallback
+# when the server will not serve a bare SHA; the fetched commit must be SHA either way.
 # Output: /root/out/<arch>/Image-{base,fix}, config, logs.
 set -euo pipefail
 A=${1:?arch}; SHA=${SHA:?sha}; J=${J:-6}
+REPO=${REPO:-https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git}; REF=${REF:-}
 case $A in
   arm64) IMG=arch/arm64/boot/Image; X=aarch64-linux-gnu- ;;
   riscv) IMG=arch/riscv/boot/Image; X=riscv64-linux-gnu- ;;
@@ -18,7 +21,7 @@ O=/root/out/$A; mkdir -p "$O"
 W=${WT:-/root/k-$A}
 if [ ! -e "$W/.git" ]; then
   if [ -e /root/k/.git ]; then git -C /root/k worktree add -q --detach "$W" "$SHA"
-  else mkdir -p "$W" && cd "$W" && git init -q && git remote add origin https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git && git fetch -q --depth 1 origin "$SHA" && git checkout -q --detach "$SHA"; fi
+  else mkdir -p "$W" && cd "$W" && git init -q && git remote add origin "$REPO" && { git fetch -q --depth 1 origin "$SHA" || { [ -n "$REF" ] && git fetch -q --depth 1 origin "$REF"; }; } && git checkout -q --detach "$SHA"; fi
 fi
 cd "$W" && git checkout -q --detach "$SHA" && git log -1 --format='%H %s' > "$O/base-commit.txt"
 mk -s defconfig
