@@ -7,8 +7,6 @@ on:
       only:
         description: "longterm, stable or mainline (empty: all three)"
         default: ""
-  push:
-    branches: [ci/2-x86-matrix]   # TEMPORARY, removed before merge
 permissions:
   contents: read
 jobs:
