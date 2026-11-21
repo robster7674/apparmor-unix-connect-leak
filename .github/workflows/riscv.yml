@@ -43,7 +43,7 @@ jobs:
           path: prev
       - name: Stage previous kernels
         if: inputs.kernels_run != ''
-        run: sudo mkdir -p /root/out/riscv && sudo cp prev/riscv/Image-base prev/riscv/Image-fix /root/out/riscv/ && sudo sha256sum /root/out/riscv/Image-*
+        run: sudo mkdir -p /root/out/riscv && sudo cp prev/riscv/Image-base prev/riscv/Image-fix /root/out/riscv/ && sudo sh -c 'sha256sum /root/out/riscv/Image-*'
       - name: Build base + fix
         if: inputs.kernels_run == ''
         env:
