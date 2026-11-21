@@ -7,8 +7,12 @@ on:
       sha:
         description: mainline commit
         default: 4405c18c95d2d0f99f6c581ef0ee8591a1aa6ccd
+      kernels_run:
+        description: "run id to take Image-base/Image-fix from (skips the build and the unpatched guest test; empty: build and test both)"
+        default: ""
 permissions:
   contents: read
+  actions: read
 jobs:
   test:
     runs-on: ubuntu-24.04-riscv
@@ -25,22 +29,43 @@ jobs:
             libasound2t64 qemu-system-misc qemu-utils opensbi u-boot-qemu cloud-image-utils python3 rsync
       - name: Stage scripts
         run: sudo install -m 755 build-arch.sh vm.sh guest-test.sh /root/ && sudo install -m 644 fix.patch /root/
+      - name: Previous kernels
+        if: inputs.kernels_run != ''
+        env:
+          RUN: ${{ inputs.kernels_run }}
+        run: '[[ "$RUN" =~ ^[0-9]+$ ]] || { echo "kernels_run must be a run id"; exit 1; }'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: inputs.kernels_run != ''
+        with:
+          name: aa3833-riscv64
+          run-id: ${{ inputs.kernels_run }}
+          github-token: ${{ github.token }}
+          path: prev
+      - name: Stage previous kernels
+        if: inputs.kernels_run != ''
+        run: sudo mkdir -p /root/out/riscv && sudo cp prev/riscv/Image-base prev/riscv/Image-fix /root/out/riscv/ && sudo sha256sum /root/out/riscv/Image-*
       - name: Build base + fix
+        if: inputs.kernels_run == ''
         env:
           SHA: ${{ inputs.sha }}
         run: |
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "sha must be 40 hex"; exit 1; }
           sudo SHA="$SHA" J="$(nproc)" /root/build-arch.sh riscv
       - name: Guest test, unpatched
+        if: inputs.kernels_run == ''
         run: sudo /root/vm.sh riscv rv-a prep && sudo /root/vm.sh riscv rv-a run /root/out/riscv/Image-base base
       - name: Guest test, fix
-        run: sudo /root/vm.sh riscv rv-a run /root/out/riscv/Image-fix fix
+        env:
+          PREV: ${{ inputs.kernels_run }}
+        run: |
+          [ -z "$PREV" ] || sudo /root/vm.sh riscv rv-a prep
+          sudo /root/vm.sh riscv rv-a run /root/out/riscv/Image-fix fix
       - name: Collect
         if: always()
         run: |
           # the glob must expand as root: /root is not readable by the runner user
           sudo sh -c 'cp -r /root/out results; cp /root/vm/rv-a/console-*.log results/'
-          sudo chown -R "$USER" results; rm -f results/riscv/Image-*
+          sudo chown -R "$USER" results   # the Image files stay: kernels_run reuses them
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
