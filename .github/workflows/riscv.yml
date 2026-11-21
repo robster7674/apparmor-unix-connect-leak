@@ -37,7 +37,10 @@ jobs:
         run: sudo /root/vm.sh riscv rv-a run /root/out/riscv/Image-fix fix
       - name: Collect
         if: always()
-        run: sudo cp -r /root/out results && sudo cp /root/vm/rv-a/console-*.log results/ 2>/dev/null; sudo chown -R "$USER" results; rm -f results/riscv/Image-*
+        run: |
+          # the glob must expand as root: /root is not readable by the runner user
+          sudo sh -c 'cp -r /root/out results; cp /root/vm/rv-a/console-*.log results/'
+          sudo chown -R "$USER" results; rm -f results/riscv/Image-*
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
