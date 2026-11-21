@@ -80,7 +80,7 @@ in complain mode and the client runs under `aa-exec`.
 | T3 | 2000 connects with 50 sockets held open across `apparmor_parser -r`, then close them and remove the profile. | 2 frees: the original and the replacement. |
 | T4 | Kernel log, cleared at the start. | No `refcount_t`, KASAN, `BUG:`, `Oops` or `WARNING:` lines. |
 
-Unpatched, N = 0 frees the profile, but N = 1 and N = 20 never do and T3 frees 1 of 2. A leak of one reference per
+Unpatched, N = 0 frees the profile, but N = 1 and N = 20 do not (the test waits 30 s) and T3 frees 1 of 2. A leak of one reference per
 connect is why one connect is enough.
 
 ## Results
@@ -88,7 +88,7 @@ connect is why one connect is enough.
 ### Mainline 4405c18c95d2 (v7.4-rc3+, 2026-11-18), three architectures
 
 Defconfig plus AppArmor as the default LSM, `SECURITY_APPARMOR_DEBUG_ASSERTS`, BTF and ftrace for bpftrace, and
-kmemleak. The same tree was built unpatched and with `fix.patch`. Guests: Ubuntu 24.04 cloud image release-20261017
+kmemleak. KASAN was not enabled, so "clean" in T4 means no refcount, `BUG:` or `WARNING:` lines, not a KASAN pass. The same tree was built unpatched and with `fix.patch`. Guests: Ubuntu 24.04 cloud image release-20261017
 (pinned by SHA256), booted with `-kernel` under QEMU TCG (no KVM). x86-b is an independent repeat on a fresh disk.
 
 | | x86-a | x86-b | arm64 | riscv64 |
