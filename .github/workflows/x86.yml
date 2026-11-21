@@ -62,13 +62,15 @@ jobs:
         if: always()
         run: |
           # the glob must expand as root: /root is not readable by the runner user
-          sudo sh -c 'cp -r /root/out results && cp /root/vm/x-a/console-*.log results/'
+          sudo sh -c 'cp -r /root/out results; cp /root/vm/x-a/console-*.log results/ || echo "no console logs"'
           sudo chown -R "$USER" results; rm -f results/x86/bzImage-*
       - name: Summary
+        if: always()
         env:
           NAME: ${{ matrix.name }}
           SHA: ${{ matrix.sha }}
         run: |
+          mkdir -p results
           { echo "Kernel \`$NAME\` at \`$SHA\`"; echo; python3 summarize.py "$NAME" results base fix; } | tee -a "$GITHUB_STEP_SUMMARY" results/summary.md
           # summarize.py exits non-zero on a failed check; tee's status would hide it
           python3 summarize.py "$NAME" results base fix > /dev/null
