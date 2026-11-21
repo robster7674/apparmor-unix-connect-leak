@@ -1,5 +1,5 @@
 #!/bin/bash
-# QEMU (TCG, no KVM) guest from a pinned Ubuntu 24.04 cloud image, one directory per VM.
+# QEMU guest (TCG; KVM when an x86 guest runs on an x86 host that has /dev/kvm) from a pinned Ubuntu 24.04 cloud image, one directory per VM.
 # Usage: vm.sh <x86|arm64|riscv> <vmname> prep            -> fresh disk + cloud-init seed (installs bpftrace)
 #        vm.sh <x86|arm64|riscv> <vmname> run <kernel> <label> -> boot kernel, run guest-test.sh, save /root/out/test-<vmname>-<label>.txt
 set -euo pipefail
@@ -13,6 +13,8 @@ case $A in
   riscv) F=ubuntu-24.04-server-cloudimg-riscv64.img; S=2d48190b4de1a809879c7b2137381a24b52a3a23a65b4d4a7b3f6d7ae774b7e9
          Q="qemu-system-riscv64 -machine virt -cpu rv64"; CON=ttyS0 ;;
 esac
+ACCEL=tcg,thread=multi
+if [ "$A" = x86 ] && [ "$(uname -m)" = x86_64 ] && [ -w /dev/kvm ]; then ACCEL=kvm; Q=${Q/-cpu max/-cpu host}; fi
 I=/root/vm/images; V=/root/vm/$N; mkdir -p "$I" "$V"
 PORT=$((2200 + $(printf '%s' "$N" | cksum | cut -d' ' -f1) % 700))
 SSH="ssh -q -i $V/key -p $PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10 root@127.0.0.1"
@@ -36,7 +38,7 @@ EOF
   echo "PREP-OK $N port=$PORT" ;;
 run)
   K=$4; L=$5
-  $Q -accel tcg,thread=multi -smp 4 -m 6G \
+  $Q -accel $ACCEL -smp 4 -m 6G \
     -kernel "$K" -append "root=/dev/vda1 rw console=$CON apparmor=1 lsm=landlock,lockdown,yama,apparmor,bpf net.ifnames=0" \
     -drive file="$V/disk.qcow2",if=virtio,format=qcow2 -drive file="$V/seed.img",if=virtio,format=raw \
     -netdev user,id=n0,hostfwd=tcp:127.0.0.1:$PORT-:22 -device virtio-net-pci,netdev=n0,romfile= \
@@ -44,6 +46,7 @@ run)
   up=; for _ in $(seq 240); do $SSH true 2>/dev/null && { up=1; break; }; sleep 10; done
   [ -n "$up" ] || { echo "guest did not come up"; tail -40 "$V/console-$L.log"; kill "$(cat "$V/qemu.pid")"; exit 1; }
   for _ in $(seq 180); do $SSH test -e /root/cloud-init-done && break; sleep 10; done
+  echo "accel=$ACCEL"
   $SSH 'uname -a; command -v bpftrace aa-exec apparmor_parser python3; cat /sys/kernel/security/lsm; echo; aa-enabled'
   $SSH 'cat > /root/guest-test.sh' < /root/guest-test.sh
   $SSH 'bash /root/guest-test.sh' 2>&1 | tee "/root/out/test-$N-$L.txt"
