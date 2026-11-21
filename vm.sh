@@ -39,7 +39,7 @@ run)
   $Q -accel tcg,thread=multi -smp 4 -m 6G \
     -kernel "$K" -append "root=/dev/vda1 rw console=$CON apparmor=1 lsm=landlock,lockdown,yama,apparmor,bpf net.ifnames=0" \
     -drive file="$V/disk.qcow2",if=virtio,format=qcow2 -drive file="$V/seed.img",if=virtio,format=raw \
-    -netdev user,id=n0,hostfwd=tcp:127.0.0.1:$PORT-:22 -device virtio-net-pci,netdev=n0 \
+    -netdev user,id=n0,hostfwd=tcp:127.0.0.1:$PORT-:22 -device virtio-net-pci,netdev=n0,romfile= \
     -display none -serial file:"$V/console-$L.log" -daemonize -pidfile "$V/qemu.pid"
   up=; for _ in $(seq 240); do $SSH true 2>/dev/null && { up=1; break; }; sleep 10; done
   [ -n "$up" ] || { echo "guest did not come up"; tail -40 "$V/console-$L.log"; kill "$(cat "$V/qemu.pid")"; exit 1; }
