@@ -22,7 +22,7 @@ jobs:
           sudo apt-get update -q
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
             build-essential gcc-14 flex bison bc libelf-dev libssl-dev dwarves git ca-certificates cpio kmod \
-            qemu-system-misc qemu-utils opensbi u-boot-qemu cloud-image-utils python3 rsync
+            libasound2t64 qemu-system-misc qemu-utils opensbi u-boot-qemu cloud-image-utils python3 rsync
       - name: Stage scripts
         run: sudo install -m 755 build-arch.sh vm.sh guest-test.sh /root/ && sudo install -m 644 fix.patch /root/
       - name: Build base + fix
