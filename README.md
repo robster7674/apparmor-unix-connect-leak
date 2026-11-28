@@ -49,7 +49,7 @@ version from John Johansen's tree as a SAUCE patch:
 (LP: #2028253, cherry-picked from gitlab.com/jjohansen/apparmor-kernel). In it, `security/apparmor/lsm.c` has no
 `apparmor_sk_alloc_security()`, so the label starts NULL, and the connect hook assigns it only
 `if (!new_ctx->label)` (line 1354 at tag `Ubuntu-6.8.0-151.151`, 521cce96c1d5). Nothing is overwritten, so nothing
-leaks. The upstream version changed this in three v6.17 commits: c05e705812d1 replaced the guard with an `AA_BUG()`,
+leaks. The upstream version changed this in three v6.17 commits: c05e705812d1 has an `AA_BUG()` where the out-of-tree code has the guard,
 88fec3526e84 added the reference at alloc, and f3c0675bb9e0 dropped the `AA_BUG()`. Checked 2026-11-28 in the noble
 git tree (`git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/noble`).
 
