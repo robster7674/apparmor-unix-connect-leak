@@ -22,7 +22,7 @@ This section is updated with the lore link once it is sent.
 | v6.16 and older mainline | no (the commit is not in v6.16) |
 | longterm 6.12, 6.6, 6.1, 5.15, 5.10 | no (no `apparmor_unix_stream_connect()` in the latest of each) |
 | Ubuntu 7.0.0-42 | yes (reproduced) |
-| Ubuntu 6.8 (noble) | no (its out-of-tree code leaves the label NULL at alloc and guards the connect hook) |
+| Ubuntu 6.8 (noble) | no (its out-of-tree af_unix code, SAUCE commit `938de00f4fc1`, leaves the label NULL at alloc and guards the connect hook; see [below](#why-ubuntu-68-is-not-affected)) |
 
 ## The bug
 
@@ -34,10 +34,24 @@ Since 88fec3526e84 ("apparmor: make sure unix socket labeling is correctly updat
 2. `unix_stream_connect()` then calls `security_unix_stream_connect()`. `apparmor_unix_stream_connect()` does
    `rcu_assign_pointer(new_ctx->label, aa_get_label(peer_ctx->label))`. It never puts the label from step 1.
 
-Before that commit the label was NULL at alloc and the hook guarded the assignment with `if (!new_ctx->label)`.
-f3c0675bb9e0 later removed the `AA_BUG()` that asserted `new_ctx->label` was still NULL here, which left the reference.
+Before that commit nothing labeled the socket at alloc, and the hook asserted the label was still NULL with
+`AA_BUG(new_ctx->label)` (from c05e705812d1, "apparmor: add fine grained af_unix mediation", also v6.17).
+f3c0675bb9e0 ("apparmor: fix test error: WARNING in apparmor_unix_stream_connect") later removed that `AA_BUG()`
+instead of putting the label, which left the reference.
 The sibling hooks `apparmor_socket_post_create()`, `apparmor_socket_socketpair()` and `apparmor_sk_clone_security()` all
 put the old label before overwriting it. Only the connect hook does not.
+
+### Why Ubuntu 6.8 is not affected
+
+Fine-grained af_unix mediation reached mainline only in v6.17. Ubuntu's 6.8 kernel (noble) carries the out-of-tree
+version from John Johansen's tree as a SAUCE patch:
+`938de00f4fc19da963a67bfca3526f493c6460e4` "UBUNTU: SAUCE: apparmor4.0.0 [47/90]: af_unix mediation"
+(LP: #2028253, cherry-picked from gitlab.com/jjohansen/apparmor-kernel). In it, `security/apparmor/lsm.c` has no
+`apparmor_sk_alloc_security()`, so the label starts NULL, and the connect hook assigns it only
+`if (!new_ctx->label)` (line 1354 at tag `Ubuntu-6.8.0-151.151`, 521cce96c1d5). Nothing is overwritten, so nothing
+leaks. The upstream version changed this in three v6.17 commits: c05e705812d1 replaced the guard with an `AA_BUG()`,
+88fec3526e84 added the reference at alloc, and f3c0675bb9e0 dropped the `AA_BUG()`. Checked 2026-11-28 in the noble
+git tree (`git.launchpad.net/~ubuntu-kernel/ubuntu/+source/linux/+git/noble`).
 
 ## The fix
 
